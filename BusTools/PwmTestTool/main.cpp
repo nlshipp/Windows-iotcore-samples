@@ -104,18 +104,27 @@ PwmController^ MakeDevice (_In_opt_ String^ friendlyName)
 {
     using namespace Windows::Devices::Enumeration;
 
-    String^ aqs;
-    if (friendlyName)
+	String^ aqs;
+	String^ id;
+
+	if (friendlyName)
         aqs = PwmController::GetDeviceSelector(friendlyName);
     else
         aqs = PwmController::GetDeviceSelector();
 
     auto dis = concurrency::create_task(DeviceInformation::FindAllAsync(aqs)).get();
-    if (dis->Size < 1) {
+	if (dis->Size > 0) {
+		id = dis->GetAt(0)->Id;
+	}
+	else if (friendlyName->Length() >= 2 &&
+		     friendlyName->ToString()->Data()[0] == L'\\' &&
+		     friendlyName->ToString()->Data()[1] == L'\\') {
+		id = friendlyName;
+	}
+	else {
         throw wexception(L"pwm controller not found");
     }
 
-    String^ id = dis->GetAt(0)->Id;
     auto device = concurrency::create_task(PwmController::FromIdAsync(
                     id)).get();
 
