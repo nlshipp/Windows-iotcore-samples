@@ -1,7 +1,6 @@
 // Copyright (c) Microsoft. All rights reserved.
-
 //
-// pwmtesttool
+// PwmTestTool
 //
 //   Utility to read and write pwm devices from the command line.
 //   Shows how to use C++/CX in console applications.
@@ -41,62 +40,42 @@ void ListPwmControllers ()
 
     std::wcout << L"Finding PwmControllers\n";
 
-    String^ friendlyNameProperty =
-        L"System.Devices.SchematicName";
-	auto properties = ref new Vector<String^>();
+    String^ friendlyNameProperty = L"System.Devices.SchematicName";
+    auto properties = ref new Vector<String^>();
     properties->Append(friendlyNameProperty);
 
-	auto dis = concurrency::create_task(DeviceInformation::FindAllAsync(
-		PwmController::GetDeviceSelector(), properties)).get();
-	if (dis->Size < 1) {
+    auto dis = concurrency::create_task(DeviceInformation::FindAllAsync(
+        PwmController::GetDeviceSelector(), properties)).get();
+    if (dis->Size < 1) {
         std::wcout << L"There are no pwm controllers on this system.\n";
         return;
     }
 
-	std::wcout << L"Found " << dis->Size << L" PwmControllers\n";
+    std::wcout << L"Found " << dis->Size << L" PwmControllers\n";
 
     std::wcout << L"  SchematicName Id pincount minFrequency maxFrequency\n";
     for (const auto& di : dis) {
-		String^ id = di->Id;
-		String^ friendlyName = L"<null>";
+        String^ id = di->Id;
+        String^ friendlyName = L"<null>";
 
-		auto prop = di->Properties->Lookup(friendlyNameProperty);
-		if (prop != nullptr)
-		{
-			friendlyName = prop->ToString();
-		}
+        auto prop = di->Properties->Lookup(friendlyNameProperty);
+        if (prop != nullptr) {
+            friendlyName = prop->ToString();
+        }
 
-		std::wcout << L"  " << friendlyName->Data() << L" " << id->Data() << L" ";
-//		std::wcout << L" probing id " << id->ToString()->Data() << L"\n";
+        std::wcout << L"  " << friendlyName->Data() << L" " << id->Data() << L" ";
 
-		auto device = concurrency::create_task(PwmController::FromIdAsync(
-			id)).get();
+        auto device = concurrency::create_task(PwmController::FromIdAsync(
+            id)).get();
 
-		if (!device) {
-			std::wostringstream msg;
-			std::wcout << L"Pwm controller " << id->Data() <<
-				L" is in use.\n";
-			continue;
-		}
+        if (!device) {
+            std::wostringstream msg;
+            std::wcout << L"Pwm controller " << id->Data() <<
+                L" is in use.\n";
+            continue;
+        }
 
-		std::wcout << device->PinCount << L" " << device->MinFrequency << L" " << device->MaxFrequency << L"\n";
-
-#if 0
-		for (const auto& prop : di->Properties) {
-//			if (prop->GetType()->GetTypeCode() == Platform::TypeCode::String)
-//			{
-				wprintf(
-					L"%s %s\n",
-					prop->Key->Data(), prop->Value->ToString()->Data());
-//			}
-		//else
-		//{
-		//	wprintf(
-		//		L"%s %s\n",
-		//		prop->Key->Data(), prop->GetType()->ToString()->Data());
-		//}
-		}
-#endif
+        std::wcout << device->PinCount << L" " << device->MinFrequency << L" " << device->MaxFrequency << L"\n";
     }
 }
 
@@ -104,24 +83,26 @@ PwmController^ MakeDevice (_In_opt_ String^ friendlyName)
 {
     using namespace Windows::Devices::Enumeration;
 
-	String^ aqs;
-	String^ id;
+    String^ aqs;
+    String^ id;
 
-	if (friendlyName)
+    if (friendlyName) {
         aqs = PwmController::GetDeviceSelector(friendlyName);
-    else
+    }
+    else {
         aqs = PwmController::GetDeviceSelector();
+    }
 
     auto dis = concurrency::create_task(DeviceInformation::FindAllAsync(aqs)).get();
-	if (dis->Size > 0) {
-		id = dis->GetAt(0)->Id;
-	}
-	else if (friendlyName->Length() >= 2 &&
-		     friendlyName->ToString()->Data()[0] == L'\\' &&
-		     friendlyName->ToString()->Data()[1] == L'\\') {
-		id = friendlyName;
-	}
-	else {
+    if (dis->Size > 0) {
+        id = dis->GetAt(0)->Id;
+    }
+    else if (friendlyName->Length() >= 2 &&
+             friendlyName->ToString()->Data()[0] == L'\\' &&
+             friendlyName->ToString()->Data()[1] == L'\\') {
+        id = friendlyName;
+    }
+    else {
         throw wexception(L"pwm controller not found");
     }
 
@@ -138,91 +119,10 @@ PwmController^ MakeDevice (_In_opt_ String^ friendlyName)
     return device;
 }
 
-#if 0
-std::wostream& operator<< (std::wostream& os, const pwmTransferResult& result)
-{
-    switch (result.Status) {
-    case pwmTransferStatus::FullTransfer: break;
-    case pwmTransferStatus::PartialTransfer:
-        os << L"Partial Transfer. Transferred " <<
-            result.BytesTransferred << L" bytes\n";
-        break;
-    case pwmTransferStatus::SlaveAddressNotAcknowledged:
-        os << L"Slave address was not acknowledged\n";
-        break;
-    case pwmTransferStatus::ClockStretchTimeout:
-        os << L"A clock stretch timeout occurred\n";
-        break;
-    case pwmTransferStatus::UnknownError:
-        os << L"The transfer failed for an unknown reason\n";
-        break;
-    default:
-        throw wexception(L"Invalid transfer status value");
-    }
-    return os;
-}
-
-std::wistream& expect (std::wistream& is, wchar_t delim)
-{
-    wchar_t ch;
-    while (is.get(ch)) {
-        if (ch == delim) return is;
-        if (!isspace(ch)) {
-            is.clear(is.failbit);
-            break;
-        }
-    }
-    return is;
-}
-
-std::wistream& operator>> (std::wistream& is, std::vector<BYTE>& bytes)
-{
-    bytes.clear();
-
-    if (!expect(is, L'{')) {
-        std::wcout << L"Syntax error: expecting '{'\n";
-        return is;
-    }
-
-    // get a sequence of bytes, e.g.
-    //   write { 0 1 2 3 4 aa bb cc dd }
-    unsigned int byte;
-    while (is >> std::hex >> byte) {
-        if (byte > 0xff) {
-            std::wcout << L"Out of range [0, 0xff]: " << std::hex << byte << L"\n";
-            is.clear(is.failbit);
-            return is;
-        }
-        bytes.push_back(static_cast<BYTE>(byte));
-    }
-
-    if (bytes.empty()) {
-        std::wcout << L"Zero-length buffers are not allowed\n";
-        is.clear(is.failbit);
-        return is;
-    }
-
-    is.clear();
-    if (!expect(is, L'}')) {
-        std::wcout << L"Syntax error: expecting '}'\n";
-        return is;
-    }
-    return is;
-}
-
-std::wostream& operator<< (std::wostream& os, const Platform::Array<BYTE>^ bytes)
-{
-    for (auto byte : bytes)
-        os << L" " << std::hex << byte;
-    return os;
-}
-
-#endif
-
 std::wostream& operator<< (std::wostream& os, PwmPulsePolarity polarity)
 {
     switch (polarity) {
-	case PwmPulsePolarity::ActiveHigh:
+    case PwmPulsePolarity::ActiveHigh:
         return os << L"ActiveHigh";
     case PwmPulsePolarity::ActiveLow:
         return os << L"ActiveLow";
@@ -231,22 +131,21 @@ std::wostream& operator<< (std::wostream& os, PwmPulsePolarity polarity)
     }
 }
 
-
 PCWSTR Help =
     L"Commands:\n"
-    L" > freq N                           Set controller frequency (Hz)\n"
-    L" > open N                           Open pin N\n"
-	L" > start                            start PWM\n"
-	L" > stop                             stop PWM\n"
-	L" > dutycycle                        set duty cycle percentage to N\n"
-	L" > polarity                         toggle polarity\n"
-	L" > info                             Display device information\n"
+    L" > freq <f>                         Set controller frequency (Hz)\n"
+    L" > open <pin>                       Open pin\n"
+    L" > start                            start PWM\n"
+    L" > stop                             stop PWM\n"
+    L" > dutycycle <percentage>           set duty cycle percentage\n"
+    L" > polarity                         toggle polarity\n"
+    L" > info                             Display device information\n"
     L" > help                             Display this help message\n"
     L" > quit                             Quit\n\n";
 
 void ShowPrompt (PwmController^ device)
 {
-	PwmPin^ pin;
+    PwmPin^ pin;
 
     while (std::wcin) {
         std::wcout << L"> ";
@@ -255,9 +154,10 @@ void ShowPrompt (PwmController^ device)
         if (!std::getline(std::wcin, line)) {
             return;
         }
-        std::wistringstream linestream(line);
 
+        std::wistringstream linestream(line);
         std::wstring command;
+
         linestream >> command;
         if ((command == L"q") || (command == L"quit")) {
             return;
@@ -265,79 +165,87 @@ void ShowPrompt (PwmController^ device)
             std::wcout << Help;
         } else if (command == L"open") {
             // open pin N
-			unsigned int pinId;
+            unsigned int pinId;
             if (!(linestream >> std::dec >> pinId)) {
                 std::wcout << L"Expecting integer. e.g: open 0\n";
                 continue;
             }
 
-			pin = device->OpenPin(pinId);
-		}
-		else if (command == L"freq") {
-			// set controller frequency
-			double freq;
+            pin = device->OpenPin(pinId);
+        }
+        else if (command == L"freq") {
+            // set controller frequency
+            double freq;
 
-			if (!(linestream >> freq)) {
-				std::wcout << L"Expecting float.\n";
-			}
+            if (!(linestream >> freq)) {
+                std::wcout << L"Expecting float.\n";
+                continue;
+            }
 
-			device->SetDesiredFrequency(freq);
-		}
-		else if (command == L"start") {
-			if (!pin) {
-				std::wcout << L"No open pin\n";
-			}
+            device->SetDesiredFrequency(freq);
+        }
+        else if (command == L"start") {
+            if (!pin) {
+                std::wcout << L"No open pin\n";
+                continue;
+            }
 
-			pin->Start();
-		}
-		else if (command == L"stop") {
-			if (!pin) {
-				std::wcout << L"No open pin\n";
-			}
-			else if (!pin->IsStarted) {
-				std::wcout << L"Pin not started\n";
-			}
-			
-			pin->Stop();
-		} 
-		else if (command == L"dutycycle") {
-			double duty;
+            pin->Start();
+        }
+        else if (command == L"stop") {
+            if (!pin) {
+                std::wcout << L"No open pin\n";
+                continue;
+            }
+            else if (!pin->IsStarted) {
+                std::wcout << L"Pin not started\n";
+                continue;
+            } 
 
-			if (!(linestream >> duty)) {
-				std::wcout << L"Expecting float.\n";
-			}
+            pin->Stop();
+        } 
+        else if (command == L"dutycycle") {
+            double duty;
 
-			if (!pin) {
-				std::wcout << L"No open pin\n";
-			}
+            if (!(linestream >> duty)) {
+                std::wcout << L"Expecting float.\n";
+                continue;
+            } else if (!pin) {
+                std::wcout << L"No open pin\n";
+                continue;
+            } else if ((duty < 0.0) || (duty > 100.0)) {
+                std::wcout << "Duty cycle must be between 0 and 100\n";
+                continue;
+            }
 
-			pin->SetActiveDutyCyclePercentage(duty / 100.0);
-		}
-		else if (command == L"polarity") {
-			if (!pin) {
-				std::wcout << L"No open pin\n";
-			}
+            pin->SetActiveDutyCyclePercentage(duty / 100.0);
+        }
+        else if (command == L"polarity") {
+            if (!pin) {
+                std::wcout << L"No open pin\n";
+                continue;
+            }
 
-			if (pin->Polarity == PwmPulsePolarity::ActiveHigh) {
-				pin->Polarity = PwmPulsePolarity::ActiveLow;
-			}
-			else {
-				pin->Polarity = PwmPulsePolarity::ActiveHigh;
-			}
+            if (pin->Polarity == PwmPulsePolarity::ActiveHigh) {
+                pin->Polarity = PwmPulsePolarity::ActiveLow;
+            }
+            else {
+                pin->Polarity = PwmPulsePolarity::ActiveHigh;
+            }
 
-			std::wcout << L"Polarity is now " << pin->Polarity << L"\n";
-		}
-		else if (command == L"info") {
-			std::wcout << L" ActualFrequency: " << device->ActualFrequency << L"\n";
-			std::wcout << L"    MaxFrequency: " << device->MaxFrequency << L"\n";
-			std::wcout << L"    MinFrequency: " << device->MinFrequency << L"\n";
-			std::wcout << L"        PinCount: " << device->PinCount << L"\n";
+            std::wcout << L"Polarity is now " << pin->Polarity << L"\n";
+        }
+        else if (command == L"info") {
+            std::wcout << L" ActualFrequency: " << device->ActualFrequency << L"\n";
+            std::wcout << L"    MaxFrequency: " << device->MaxFrequency << L"\n";
+            std::wcout << L"    MinFrequency: " << device->MinFrequency << L"\n";
+            std::wcout << L"        PinCount: " << device->PinCount << L"\n";
 
-			if (pin) {
-				std::wcout << L"                 IsStarted: " << pin->IsStarted << L"\n";
-				std::wcout << L"                  Polarity: " << pin->Polarity << L"\n";
-				std::wcout << L" ActiveDutyCyclePercentage: " << pin->GetActiveDutyCyclePercentage() << L"\n";
-			}
+            if (pin) {
+                std::wcout << L"                 IsStarted: " << pin->IsStarted << L"\n";
+                std::wcout << L"                  Polarity: " << pin->Polarity << L"\n";
+                std::wcout << L" ActiveDutyCyclePercentage: " << pin->GetActiveDutyCyclePercentage() * 100.0 << L"\n";
+            }
         } else if (command.empty()) {
             // ignore
         } else {
@@ -379,34 +287,19 @@ int main (Platform::Array<Platform::String^>^ args)
         return 1;
     }
 
-    {
-        PCWSTR arg = args->get(optind)->Data();
-        if (!_wcsicmp(arg, L"-h") || !_wcsicmp(arg, L"/h") ||
-            !_wcsicmp(arg, L"-?") || !_wcsicmp(arg, L"/?")) {
+    PCWSTR arg = args->get(optind)->Data();
+    if (!_wcsicmp(arg, L"-h") || !_wcsicmp(arg, L"/h") ||
+        !_wcsicmp(arg, L"-?") || !_wcsicmp(arg, L"/?")) {
 
-            PrintUsage(args->get(0)->Data());
-            return 0;
-        }
-
-        if (!_wcsicmp(arg, L"-l") || !_wcsicmp(arg, L"-list")) {
-            ListPwmControllers();
-            return 0;
-        }
+        PrintUsage(args->get(0)->Data());
+        return 0;
     }
 
-#if 0
-    int slaveAddress;
-    {
-        String^ arg = args->get(optind++);
-        wchar_t *endptr;
-        slaveAddress = int(wcstoul(arg->Data(), &endptr, 0));
-        if (endptr != arg->End()) {
-            std::wcerr << L"Expecting integer: " << arg->Data() << L"\n";
-            std::wcerr << L"Type '" << args->get(0)->Data() << " -h' for usage\n";
-            return 1;
-        }
+    if (!_wcsicmp(arg, L"-l") || !_wcsicmp(arg, L"-list")) {
+        ListPwmControllers();
+        return 0;
     }
-#endif
+
     String^ friendlyName;
     if (optind < args->Length) {
         friendlyName = args->get(optind++);

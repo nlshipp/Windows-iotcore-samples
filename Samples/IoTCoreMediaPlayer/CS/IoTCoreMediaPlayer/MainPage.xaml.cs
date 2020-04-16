@@ -1,7 +1,11 @@
 ﻿using System;
 using System.Threading.Tasks;
+using Windows.Media.Capture;
+using Windows.Media.MediaProperties;
 using Windows.Storage;
 using Windows.Storage.Search;
+using Windows.Storage.Streams;
+using Windows.UI.Core;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Input;
@@ -18,8 +22,7 @@ namespace IoTCoreMediaPlayer
         // from https://msdn.microsoft.com/en-us/library/windows/apps/xaml/mt188703.aspx?f=255&MSPPError=-2147217396
         private string[] mediaFileExtensions = {
             // music
-            ".wav"
-                ,
+            ".wav",
             ".qcp",
             ".mp3",
             ".m4r",
@@ -42,6 +45,7 @@ namespace IoTCoreMediaPlayer
             // video
             ".wm",
             ".m4v",
+            ".mkv",
             ".wmv",
             ".asf",
             ".mov",
@@ -309,6 +313,134 @@ namespace IoTCoreMediaPlayer
                     lstFiles.Focus(FocusState.Keyboard);
                 }
             }
+        }
+
+        private void mediaElement_MediaOpened()
+        {
+
+        }
+
+        private void mediaElement_MediaOpened_1(object sender, RoutedEventArgs e)
+        {
+
+        }
+
+        MediaCapture capture;
+        InMemoryRandomAccessStream buffer;
+        bool record;
+        string recordedFile;
+
+        private async Task<bool> RecordProcess()
+        {
+            if (buffer != null)
+            {
+                buffer.Dispose();
+            }
+            buffer = new InMemoryRandomAccessStream();
+            if (capture != null)
+            {
+                capture.Dispose();
+            }
+            try
+            {
+                MediaCaptureInitializationSettings settings = new MediaCaptureInitializationSettings
+                {
+                    StreamingCaptureMode = StreamingCaptureMode.Audio
+                };
+                capture = new MediaCapture();
+                await capture.InitializeAsync(settings);
+                capture.RecordLimitationExceeded += (MediaCapture sender) =>
+                {
+                    //Stop
+                    //   await capture.StopRecordAsync();
+                    record = false;
+                    throw new Exception("Record Limitation Exceeded ");
+                };
+                capture.Failed += (MediaCapture sender, MediaCaptureFailedEventArgs errorEventArgs) =>
+                {
+                    record = false;
+                    throw new Exception(string.Format("Code: {0}. {1}", errorEventArgs.Code, errorEventArgs.Message));
+                };
+            }
+            catch (Exception ex)
+            {
+                if (ex.InnerException != null && ex.InnerException.GetType() == typeof(UnauthorizedAccessException))
+                {
+                    throw ex.InnerException;
+                }
+                throw;
+            }
+            return true;
+        }
+
+        public async Task PlayRecordedAudio(CoreDispatcher UiDispatcher)
+        {
+            MediaElement playback = new MediaElement();
+            IRandomAccessStream audio = buffer.CloneStream();
+
+            if (audio == null)
+                throw new ArgumentNullException("buffer");
+            StorageFolder storageFolder = KnownFolders.MusicLibrary;
+//            StorageFolder storageFolder = Windows.ApplicationModel.Package.Current.InstalledLocation;
+            if (!string.IsNullOrEmpty(recordedFile))
+            {
+                StorageFile original = await storageFolder.GetFileAsync(recordedFile);
+                await original.DeleteAsync();
+            }
+            await UiDispatcher.RunAsync(CoreDispatcherPriority.Normal, async () =>
+            {
+                StorageFile storageFile = await storageFolder.CreateFileAsync("recordedFile.wav", CreationCollisionOption.GenerateUniqueName);
+                recordedFile = storageFile.Name;
+                using (IRandomAccessStream fileStream = await storageFile.OpenAsync(FileAccessMode.ReadWrite))
+                {
+                    await RandomAccessStream.CopyAndCloseAsync(audio.GetInputStreamAt(0), fileStream.GetOutputStreamAt(0));
+                    await audio.FlushAsync();
+                    audio.Dispose();
+                }
+
+                IRandomAccessStream stream = await storageFile.OpenAsync(FileAccessMode.Read);
+                mediaElement.SetSource(stream, storageFile.FileType);
+                mediaElement.Play();
+                //                playback.SetSource(stream, storageFile.FileType);
+                //                playback.Play();
+            });
+        }
+
+        private async void recordBtn_Click(object sender, RoutedEventArgs e)
+        {
+            if (record)
+            {
+                //already recording
+            }
+            else
+            {
+                await RecordProcess();
+                // await capture.StartRecordToStreamAsync(MediaEncodingProfile.CreateMp3(AudioEncodingQuality.Auto), buffer);
+                await capture.StartRecordToStreamAsync(MediaEncodingProfile.CreateWav(AudioEncodingQuality.Auto), buffer);
+                if (record)
+                {
+                    throw new InvalidOperationException();
+                }
+                record = true;
+            }
+        }
+
+        private async void stopBtn_Click(object sender, RoutedEventArgs e)
+        {
+            if (record)
+            {
+                await capture.StopRecordAsync();
+                record = false;
+            }
+            else
+            {
+                mediaElement.Stop();
+            }
+        }
+
+        private async void playBtn_Click(object sender, RoutedEventArgs e)
+        {
+            await PlayRecordedAudio(Dispatcher);
         }
     }
 }

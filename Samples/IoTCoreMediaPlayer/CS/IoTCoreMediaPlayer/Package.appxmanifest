@@ -69,5 +69,6 @@
     <uap:Capability Name="musicLibrary" />
     <uap:Capability Name="videosLibrary" />
     <uap:Capability Name="removableStorage" />
+    <DeviceCapability Name="microphone" />
   </Capabilities>
 </Package>

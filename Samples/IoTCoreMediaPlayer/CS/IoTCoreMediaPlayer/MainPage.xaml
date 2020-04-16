@@ -12,6 +12,8 @@
             <RowDefinition Height="100" />
             <RowDefinition Height="80" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="80" />
+            <RowDefinition Height="80" />
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="80" />
@@ -35,9 +37,19 @@
             <Button x:Name="btnClear" Grid.Column="3" VerticalAlignment="Bottom" HorizontalAlignment="Stretch" Content="Clear" Margin="10, 0, 0, 0" Click="btnClear_Click" />
         </Grid>
 
-        <MediaElement x:Name="mediaElement" Grid.Row="2" Grid.Column="1" Margin="0,20" AreTransportControlsEnabled="True" />
+        <MediaElement x:Name="mediaElement" Grid.Row="2" Grid.Column="1" Margin="0,20" AreTransportControlsEnabled="True" IsLooping="True" MediaOpened="mediaElement_MediaOpened_1"/>
 
         <TextBlock x:Name="lblError" Grid.Row="2" Grid.Column="1" Visibility="Collapsed" Foreground="Red" Style="{StaticResource SubheaderTextBlockStyle}" VerticalAlignment="Center" HorizontalAlignment="Center" />
+
+        <TextBlock Grid.Row="3" Grid.Column="1" Text="IoTCore Media Recorder" VerticalAlignment="Bottom" Style="{StaticResource HeaderTextBlockStyle}" />
+
+        <AppBar Grid.Row="4" Grid.Column="1" IsOpen="True" VerticalAlignment="Center">
+            <StackPanel Orientation="Horizontal">
+            <AppBarButton x:Name="recordBtn" Label="Record" Icon="Microphone" Click="recordBtn_Click"></AppBarButton>
+            <AppBarButton x:Name="stopBtn" Label="Stop" Icon="Stop" Click="stopBtn_Click"></AppBarButton>
+            <AppBarButton x:Name="playBtn" Label="Play" Icon="Play" Click="playBtn_Click"></AppBarButton>
+            </StackPanel>
+        </AppBar>
 
         <Grid x:Name="grdPicker" Grid.Column="0" Grid.ColumnSpan="3" Grid.Row="0" Grid.RowSpan="3" Margin="40" Background="Bisque" Visibility="Collapsed">
             <Grid.RowDefinitions>
